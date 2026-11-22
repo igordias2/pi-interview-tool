@@ -27,7 +27,7 @@ const questionsData = {
 	],
 };
 
-function mount(data = questionsData) {
+function mount(data: Record<string, unknown> = questionsData) {
 	const shell = html.replace("/* __INTERVIEW_DATA_PLACEHOLDER__ */", JSON.stringify(data));
 	const dom = new JSDOM(shell, {
 		runScripts: "dangerously",
@@ -57,7 +57,7 @@ function mount(data = questionsData) {
 }
 
 function activePanel(dom: JSDOM) {
-	return dom.window.document.querySelector(".option-insight-panel");
+	return dom.window.document.querySelector<HTMLElement>(".option-insight-panel");
 }
 
 describe("stepperInsightPanel modes", () => {
