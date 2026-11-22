@@ -3168,10 +3168,16 @@
     const scheduleStepperSync = () => {
       if (stepperSyncPending) return;
       stepperSyncPending = true;
-      requestAnimationFrame(() => {
+      const runSync = () => {
+        if (!stepperSyncPending) return;
         stepperSyncPending = false;
         updateStepperSidebar();
-      });
+      };
+      requestAnimationFrame(runSync);
+      // rAF never fires while the web view is occluded/minimized, which would
+      // leave the gated submit stuck disabled. Timers still run (throttled),
+      // so fall back to one.
+      setTimeout(runSync, 500);
     };
     formEl.addEventListener("change", scheduleStepperSync);
     formEl.addEventListener("input", scheduleStepperSync);
