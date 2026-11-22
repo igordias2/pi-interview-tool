@@ -19,6 +19,7 @@ export interface InterviewSettings {
 	port?: number;
 	theme?: InterviewThemeSettings;
 	snapshotDir?: string;      // Default: ~/.pi/interview-snapshots/
+	vaultDir?: string;         // Optional: folder inside an Obsidian vault that receives a Markdown note + HTML snapshot on every submitted interview (e.g. "<vault>/30-Reference/Interviews")
 	autoSaveOnSubmit?: boolean; // Default: true
 	generateModel?: string;    // e.g., "anthropic/claude-haiku-4-5"
 	glimpseFloating?: boolean; // Default: false

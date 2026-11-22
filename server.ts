@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir, homedir } from "node:os";
 import { join, dirname, basename, resolve } from "node:path";
 import { readFileSync, existsSync, mkdirSync, readdirSync, unlinkSync, renameSync, writeFileSync, chmodSync } from "node:fs";
-import { mkdir, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, writeFile, copyFile, rm, cp } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { getOptionLabel, type Question, type QuestionsFile, type MediaBlock, type OptionValue } from "./schema.ts";
@@ -132,12 +132,6 @@ export function getActiveSessions(): SessionEntry[] {
 	return pruned.filter((s) => now - s.lastSeen < STALE_THRESHOLD_MS);
 }
 
-function ensureRecoveryDir(): void {
-	if (!existsSync(RECOVERY_DIR)) {
-		mkdirSync(RECOVERY_DIR, { recursive: true });
-	}
-}
-
 function cleanupOldRecoveryFiles(): void {
 	if (!existsSync(RECOVERY_DIR)) return;
 	const now = Date.now();
@@ -157,25 +151,40 @@ function cleanupOldRecoveryFiles(): void {
 	} catch {}
 }
 
+function clearRecoveryForSession(sessionId: string, recoveryDir: string = RECOVERY_DIR): void {
+	try {
+		mkdirSync(recoveryDir, { recursive: true });
+		const shortId = sessionId.slice(0, 8);
+		for (const entry of readdirSync(recoveryDir)) {
+			if (entry.endsWith(`_${shortId}.json`)) {
+				try {
+					unlinkSync(join(recoveryDir, entry));
+				} catch {}
+			}
+		}
+	} catch {}
+}
+
 function sanitizeForFilename(str: string): string {
 	return str.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 50);
 }
 
-function saveToRecovery(
+export function saveToRecovery(
 	questions: QuestionsFile,
 	cwd: string,
 	gitBranch: string | null,
-	sessionId: string
+	sessionId: string,
+	recoveryDir: string = RECOVERY_DIR
 ): string {
-	ensureRecoveryDir();
+	mkdirSync(recoveryDir, { recursive: true });
 	const now = new Date();
 	const date = now.toISOString().slice(0, 10);
-	const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
 	const project = sanitizeForFilename(basename(cwd) || "unknown");
 	const branch = sanitizeForFilename(gitBranch || "nogit");
 	const shortId = sessionId.slice(0, 8);
-	const filename = `${date}_${time}_${project}_${branch}_${shortId}.json`;
-	const filePath = join(RECOVERY_DIR, filename);
+	// No timestamp: one recovery file per interview session, overwritten on re-save
+	const filename = `${date}_${project}_${branch}_${shortId}.json`;
+	const filePath = join(recoveryDir, filename);
 	writeFileSync(filePath, JSON.stringify(questions, null, 2));
 	return filePath;
 }
@@ -231,6 +240,8 @@ export interface InterviewServerOptions {
 	verbose?: boolean;
 	theme?: InterviewThemeConfig;
 	snapshotDir?: string;
+	recoveryDir?: string;
+	vaultDir?: string;
 	autoSaveOnSubmit?: boolean;
 	viewMode?: "stepper" | "list";
 	stepperInsightPanel?: "follow" | "sticky" | "off";
@@ -1348,6 +1359,72 @@ ${embeddedJson}
 </html>`;
 }
 
+export function sanitizeNoteName(str: string): string {
+	return str.replace(/[/\\:*?"<>|#^\[\]]/g, "-").trim().slice(0, 80);
+}
+
+function formatResponseValue(value: ResponseValue): string {
+	if (Array.isArray(value)) {
+		const items = value.map((v) => formatResponseValue(v));
+		return items.map((i) => `- ${i}`).join("\n");
+	}
+	if (typeof value === "object" && value !== null && "option" in value) {
+		const choice = value as { option: string; note?: string };
+		return choice.note ? `${choice.option} — ${choice.note}` : choice.option;
+	}
+	const text = String(value).trim();
+	return text || "_(sem resposta)_";
+}
+
+async function saveToVault(
+	vaultDir: string,
+	data: {
+		title: string;
+		questions: Question[];
+		answers: ResponseItem[];
+		project: string;
+		savedAt: string;
+		snapshotPath: string;
+		htmlFolderName: string;
+	},
+): Promise<{ notePath: string; htmlPath: string }> {
+	await mkdir(vaultDir, { recursive: true });
+	const date = data.savedAt.slice(0, 10);
+	const noteName = `Interview — ${sanitizeNoteName(data.title)} — ${date}`;
+
+	// HTML snapshot copy (evidence)
+	const htmlPath = join(vaultDir, "attachments", data.htmlFolderName);
+	await cp(data.snapshotPath, htmlPath, { recursive: true });
+
+	// Markdown note with Q&A
+	const answerById = new Map(data.answers.map((a) => [a.id, a.value]));
+	const lines: string[] = [
+		"---",
+		"type: interview",
+		`title: "${data.title.replace(/"/g, '\\"')}"`,
+		`date: ${date}`,
+		`project: ${data.project}`,
+		"tags:",
+		"  - interview",
+		"---",
+		"",
+		`# Interview — ${data.title}`,
+		"",
+		`> [!info] Submetida em ${data.savedAt}. Snapshot HTML: [[${data.htmlFolderName}/index.html|ver snapshot]]`,
+		"",
+	]
+
+	for (const q of data.questions) {
+		const value = answerById.get(q.id);
+		if (value === undefined) continue;
+		lines.push(`## ${q.question}`, "", formatResponseValue(value), "");
+	}
+
+	const notePath = join(vaultDir, `${noteName}.md`);
+	await writeFile(notePath, lines.join("\n"), "utf-8");
+	return { notePath, htmlPath };
+}
+
 export async function startInterviewServer(
 	options: InterviewServerOptions,
 	callbacks: InterviewServerCallbacks
@@ -1676,7 +1753,7 @@ export async function startInterviewServer(
 				const payload = body as { reason?: string; responses?: ResponseItem[] };
 				const reason = payload.reason;
 				if (reason === "timeout" || reason === "stale") {
-					const recoveryPath = saveToRecovery(questions, cwd, gitBranch, sessionId);
+					const recoveryPath = saveToRecovery(questions, cwd, gitBranch, sessionId, options.recoveryDir);
 					const label = reason === "timeout" ? "timed out" : "stale";
 					log(verbose, `Interview ${label}. Saved to: ${recoveryPath}`);
 				}
@@ -1851,7 +1928,9 @@ export async function startInterviewServer(
 
 				const snapshotBaseDir = options.snapshotDir ?? SNAPSHOTS_DIR;
 
-				// Build folder name: {title}-{project}-{branch}-{timestamp}[-submitted]
+				// Build folder name:
+				// - draft:  {title}-{project}-{branch}-{session}-draft       (stable per session, overwritten by autosave)
+				// - submit: {title}-{project}-{branch}-{timestamp}-submitted
 				const now = new Date();
 				const date = now.toISOString().slice(0, 10);
 				const time = now.toTimeString().slice(0, 8).replace(/:/g, "");
@@ -1859,8 +1938,10 @@ export async function startInterviewServer(
 				const project = sanitizeForFilename(basename(cwd) || "unknown");
 				const branch = sanitizeForFilename(gitBranch || "nogit");
 				const titleSlug = sanitizeForFilename(questions.title || "interview");
-				const suffix = submitted ? "-submitted" : "";
-				const folderName = `${titleSlug}-${project}-${branch}-${timestamp}${suffix}`;
+				const sessionSlug = sanitizeForFilename(sessionId.slice(0, 8));
+				const folderName = submitted
+					? `${titleSlug}-${project}-${branch}-${timestamp}-submitted`
+					: `${titleSlug}-${project}-${branch}-${sessionSlug}-draft`;
 				const snapshotPath = join(snapshotBaseDir, folderName);
 				const imagesPath = join(snapshotPath, "images");
 
@@ -1931,7 +2012,33 @@ export async function startInterviewServer(
 				});
 
 				await writeFile(join(snapshotPath, "index.html"), html);
-				if (submitted && submission === "unsaved") submission = "saved";
+				if (submitted) {
+					// Remove the draft snapshot for this session (autosave artifact)
+					const draftDir = join(
+						snapshotBaseDir,
+						`${titleSlug}-${project}-${branch}-${sessionSlug}-draft`,
+					);
+					await rm(draftDir, { recursive: true, force: true });
+					// Clear any recovery file left for this session
+					clearRecoveryForSession(sessionId, options.recoveryDir);
+					// Mirror to the vault (Markdown note + HTML snapshot) when configured
+					if (options.vaultDir) {
+						try {
+							await saveToVault(options.vaultDir, {
+								title: questions.title || "Interview",
+								questions: rewrittenQuestions,
+								answers: savedResponses,
+								project,
+								savedAt: meta.savedAt,
+								snapshotPath,
+								htmlFolderName: folderName,
+							});
+						} catch (err) {
+							log(verbose, `Vault mirror failed: ${err instanceof Error ? err.message : String(err)}`);
+						}
+					}
+					if (submission === "unsaved") submission = "saved";
+				}
 
 				sendJson(res, 200, {
 					ok: true,
@@ -2175,7 +2282,7 @@ export async function startInterviewServer(
 					if (completed || !browserConnected) return;
 					if (Date.now() - lastHeartbeatAt <= ABANDONED_GRACE_MS) return;
 					if (!markCompleted()) return;
-					const recoveryPath = saveToRecovery(questions, cwd, gitBranch, sessionId);
+					const recoveryPath = saveToRecovery(questions, cwd, gitBranch, sessionId, options.recoveryDir);
 					log(verbose, `Interview stale. Saved to: ${recoveryPath}`);
 					unregisterSession(sessionId);
 					setImmediate(() => callbacks.onCancel("stale"));

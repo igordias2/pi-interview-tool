@@ -1566,6 +1566,7 @@ export default function (pi: ExtensionAPI) {
 						...(verbose !== undefined ? { verbose } : {}),
 						theme: themeConfig,
 						...(snapshotDir !== undefined ? { snapshotDir } : {}),
+						...(settings.vaultDir ? { vaultDir: expandHome(settings.vaultDir) } : {}),
 						autoSaveOnSubmit: settings.autoSaveOnSubmit ?? true,
 						viewMode: settings.viewMode ?? "stepper",
 						stepperInsightPanel: settings.stepperInsightPanel ?? "follow",

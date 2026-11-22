@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-22
+
+### Fixed
+- Snapshot folders no longer multiply while you fill in an interview. Auto-saves now write to a single stable `-draft` folder per interview session instead of creating a new timestamped folder on every keystroke batch, and submitting removes the draft folder once the `-submitted` snapshot is written.
+- Recovery files no longer duplicate. A timed-out or stale interview now overwrites its per-session recovery file, and a successful submit deletes it.
+- Added a `recoveryDir` option (like `snapshotDir`) so hosts and tests can redirect recovery storage.
+- New `interview.vaultDir` setting: when set, every submitted interview is mirrored into that folder as a Markdown note (frontmatter + Q&A) with the HTML snapshot attached under `attachments/`. Draft autosaves are not mirrored.
+
 ## [0.14.1] - 2026-10-31
 
 ### Fixed
