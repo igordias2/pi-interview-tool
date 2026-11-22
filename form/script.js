@@ -2700,6 +2700,7 @@
     }
 
     if (stepper.enabled && handleStepperChipHotkey(event)) return;
+    if (stepper.enabled && handleStepperArrowNav(event)) return;
 
     if (maybeStartOtherInput(event)) return;
 
@@ -3097,6 +3098,29 @@
       bar.appendChild(chip);
     });
     card.appendChild(bar);
+  }
+
+  // Plain ←/→ navigate questions in stepper mode. ArrowUp/Down keep moving
+  // options (upstream behavior); text fields keep native cursor movement.
+  function handleStepperArrowNav(event) {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return false;
+    if (nav.inSubmitArea) {
+      if (event.key !== 'ArrowLeft') return false;
+      event.preventDefault();
+      focusQuestion(stepper.visibleIndex, 'prev');
+      return true;
+    }
+    const active = document.activeElement;
+    if (isEditableTextControl(active) || active instanceof HTMLTextAreaElement) return false;
+    if (active?.closest('.option-insight-panel, .option-ask-btn, .option-insight-pinned, .option-note-wrap, .attach-inline, .generate-more')) return false;
+    event.preventDefault();
+    if (event.key === 'ArrowLeft') {
+      prevQuestion();
+    } else {
+      nextQuestion();
+    }
+    return true;
   }
 
   function handleStepperChipHotkey(event) {
