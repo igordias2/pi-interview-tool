@@ -2391,7 +2391,7 @@ button {
 
 .stepper-mode #interview-form {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -2490,7 +2490,7 @@ button {
   line-height: 18px;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -2500,7 +2500,7 @@ button {
   color: var(--fg-muted);
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 

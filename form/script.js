@@ -3007,7 +3007,8 @@
       item.classList.toggle("active", cardIndex === activeCardIndex && !nav.inSubmitArea);
       state.textContent = answered ? "✓" : "●";
       const text = stepperPreview(question);
-      preview.textContent = text ? (text.length > 80 ? text.slice(0, 77) + "…" : text) : "";
+      // CSS clamps the preview to 3 lines; only guard against pathological length.
+      preview.textContent = text ? (text.length > 200 ? text.slice(0, 197) + "…" : text) : "";
     });
     if (stepper.progressEl) {
       stepper.progressEl.textContent = `${answeredCount} de ${stepper.items.length} respondidas`;
