@@ -2396,6 +2396,12 @@ button {
   align-items: start;
 }
 
+/* The 740px reading column is too narrow once the sidebar takes 280px of it —
+   use the window width in stepper mode. */
+.stepper-mode .interview-container {
+  max-width: min(1240px, calc(100vw - 48px));
+}
+
 .stepper-mode .stepper-main {
   min-width: 0;
 }
@@ -2528,6 +2534,12 @@ button {
 .stepper-submit-btn {
   padding: 6px 14px;
   font-size: 13px;
+}
+
+/* Gated submit: visible that it is unavailable, not just inert. */
+.stepper-mode .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .stepper-action-bar {

@@ -2902,6 +2902,11 @@
     return typeof value === "string" && value.trim().length > 0;
   }
 
+  function allStepperAnswered() {
+    if (!stepper.enabled || stepper.items.length === 0) return true;
+    return stepper.items.every(({ question }) => isQuestionAnswered(question));
+  }
+
   function stepperPreview(question) {
     const id = question.id;
     const value = getQuestionValue(question);
@@ -3007,6 +3012,15 @@
     if (stepper.progressEl) {
       stepper.progressEl.textContent = `${answeredCount} de ${stepper.items.length} respondidas`;
     }
+    // Submit unlocks only when every question is answered.
+    const allAnswered = answeredCount === stepper.items.length;
+    if (stepper.submitBtn) {
+      stepper.submitBtn.disabled = !allAnswered;
+      stepper.submitBtn.title = allAnswered ? "" : "Answer all questions to enable submit";
+    }
+    // Keep the canvas footer submit in sync; never fight an in-flight submission
+    // (submitForm disables it while submitting).
+    if (submitBtn) submitBtn.disabled = !allAnswered || submitBtn.disabled;
   }
 
   function updateStepperVisibility() {
@@ -4273,6 +4287,11 @@
   async function submitForm(event) {
     event.preventDefault();
     if (submitBtn.disabled) return;
+    if (stepper.enabled && !allStepperAnswered()) {
+      // Covers paths that bypass the disabled buttons (Cmd/Ctrl+Enter, requestSubmit).
+      showGlobalError("Please answer all questions before submitting.");
+      return;
+    }
     closeCameraCapture({ restoreFocus: false });
     clearGlobalError();
     clearFieldErrors();
