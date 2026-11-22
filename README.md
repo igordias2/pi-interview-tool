@@ -357,6 +357,12 @@ Settings in `~/.pi/agent/settings.json`:
 
 All existing shortcuts work in both modes (⌘/Ctrl+←/→ questions, ⌘/Ctrl+Enter submit, ⌘/Ctrl+V paste, theme toggle). Auto-advance after answering is intentionally off.
 
+**Insight panel auto-open (stepper)**: `stepperInsightPanel` controls whether the option Ask/insight panel opens without a button click (default: `"follow"`).
+
+- `"follow"`: the panel follows focus — navigating with ↑/↓ or selecting an option opens the panel on that option and closes the previous one (never steals focus from the option flow).
+- `"sticky"`: the panel opens once for the question and stays on its option while other options are selected; it closes when leaving the question or entering the submit area.
+- `"off"`: insights open only through the Ask button.
+
 **Theme notes:**
 - `mode`: `dark` (default), `light`, or `auto` (follows OS unless overridden)
 - `name`: built-in themes are `default` and `tufte`

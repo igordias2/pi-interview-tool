@@ -23,6 +23,7 @@ export interface InterviewSettings {
 	generateModel?: string;    // e.g., "anthropic/claude-haiku-4-5"
 	glimpseFloating?: boolean; // Default: false
 	viewMode?: "stepper" | "list"; // Default: "stepper"; "list" preserves the upstream UI
+	stepperInsightPanel?: "follow" | "sticky" | "off"; // Default: "follow"; auto-open behavior in stepper mode
 }
 
 export const LAUNCHERS = ["glimpse", "browser", "orca"] as const;
@@ -38,6 +39,16 @@ export function assertValidLauncher(value: unknown): void {
 }
 
 export const VIEW_MODES = ["stepper", "list"] as const;
+
+export const STEPPER_INSIGHT_PANEL_MODES = ["follow", "sticky", "off"] as const;
+
+export function assertValidStepperInsightPanel(value: unknown): void {
+	if (value === undefined) return;
+	if (typeof value === "string" && (STEPPER_INSIGHT_PANEL_MODES as readonly string[]).includes(value)) return;
+	throw new Error(
+		`interview.stepperInsightPanel must be one of: ${STEPPER_INSIGHT_PANEL_MODES.join(", ")} (received ${JSON.stringify(value)})`,
+	);
+}
 
 // viewMode changes the form layout, so an unrecognized value must fail loudly
 // instead of silently reverting to the default stepper.
@@ -66,5 +77,6 @@ export function loadSettings(settingsPath: string = SETTINGS_PATH): InterviewSet
 
 	assertValidLauncher((interview as Record<string, unknown>).launcher);
 	assertValidViewMode((interview as Record<string, unknown>).viewMode);
+	assertValidStepperInsightPanel((interview as Record<string, unknown>).stepperInsightPanel);
 	return interview as InterviewSettings;
 }

@@ -60,6 +60,40 @@ function activePanel(dom: JSDOM) {
 	return dom.window.document.querySelector(".option-insight-panel");
 }
 
+describe("stepperInsightPanel modes", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function selectSecondOption(dom: JSDOM) {
+		const radio = dom.window.document.querySelectorAll<HTMLInputElement>('input[name="arq"]')[1];
+		radio.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+		return vi.advanceTimersByTimeAsync(300);
+	}
+
+	it("off: never auto-opens", async () => {
+		const dom = mount({ ...questionsData, stepperInsightPanel: "off" });
+		vi.advanceTimersByTime(150);
+		await selectSecondOption(dom);
+		expect(activePanel(dom)).toBeNull();
+	});
+
+	it("sticky: panel stays on its option when another is selected", async () => {
+		const dom = mount({ ...questionsData, stepperInsightPanel: "sticky" });
+		vi.advanceTimersByTime(150);
+		await selectSecondOption(dom); // opens for option 1 (first change)
+		expect(activePanel(dom)).not.toBeNull();
+		const panelKey = activePanel(dom)?.dataset.optionInsightFor;
+		await selectSecondOption(dom); // selecting again must not switch/kill it
+		await vi.advanceTimersByTimeAsync(300);
+		expect(activePanel(dom)?.dataset.optionInsightFor).toBe(panelKey);
+	});
+});
+
 describe("stepper option insight auto-open", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();

@@ -13,6 +13,13 @@
   // Stepper view mode (igordias2 fork): one question per screen + sidebar.
   // "list" preserves the upstream UI exactly; anything else falls back to stepper.
   const viewMode = data.viewMode === "list" ? "list" : "stepper";
+  // Auto-open behavior for the option insight panel in stepper mode:
+  // "follow" switches the panel to the focused/selected option (default);
+  // "sticky" opens once per question and stays on its option;
+  // "off" exposes insights only through the Ask button.
+  const insightPanelMode = ["follow", "sticky", "off"].includes(data.stepperInsightPanel)
+    ? data.stepperInsightPanel
+    : "follow";
 
   const titleEl = document.getElementById("form-title");
   const descriptionEl = document.getElementById("form-description");
@@ -951,9 +958,14 @@
   }
 
   function autoOpenInsightForOption(card, optionKey) {
-    if (!stepper.enabled || !optionKey) return;
+    if (!stepper.enabled || !optionKey || insightPanelMode === "off") return;
     const question = questions.find((q) => q.id === card?.dataset?.questionId);
     if (!question || !questionCanAskAboutOption(question)) return;
+    // "sticky": a panel already open on this question stays on its option.
+    if (insightPanelMode === "sticky") {
+      const active = optionInsightState.active;
+      if (active && active.questionId === question.id) return;
+    }
     clearTimeout(autoOpenInsightTimer);
     autoOpenInsightTimer = setTimeout(() => {
       if (getActiveInsight(question.id, optionKey)) return;

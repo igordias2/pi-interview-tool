@@ -1568,6 +1568,7 @@ export default function (pi: ExtensionAPI) {
 						...(snapshotDir !== undefined ? { snapshotDir } : {}),
 						autoSaveOnSubmit: settings.autoSaveOnSubmit ?? true,
 						viewMode: settings.viewMode ?? "stepper",
+						stepperInsightPanel: settings.stepperInsightPanel ?? "follow",
 						...(questionsData.savedAnswers !== undefined ? { savedAnswers: questionsData.savedAnswers } : {}),
 						...(questionsData.savedOptionInsights !== undefined ? { savedOptionInsights: questionsData.savedOptionInsights } : {}),
 						...(questionsData.optionKeysByQuestion !== undefined ? { optionKeysByQuestion: questionsData.optionKeysByQuestion } : {}),

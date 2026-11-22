@@ -233,6 +233,7 @@ export interface InterviewServerOptions {
 	snapshotDir?: string;
 	autoSaveOnSubmit?: boolean;
 	viewMode?: "stepper" | "list";
+	stepperInsightPanel?: "follow" | "sticky" | "off";
 	savedAnswers?: ResponseItem[];
 	savedOptionInsights?: SavedOptionInsight[];
 	optionKeysByQuestion?: Record<string, string[]>;
@@ -1530,6 +1531,7 @@ export async function startInterviewServer(
 					optionKeysByQuestion,
 					autoSaveOnSubmit: options.autoSaveOnSubmit ?? true,
 					viewMode: options.viewMode === "list" ? "list" : "stepper",
+					stepperInsightPanel: options.stepperInsightPanel ?? "follow",
 					canGenerate: options.canGenerate ?? false,
 					askModels: options.askModels ?? [],
 					defaultAskModel: options.defaultAskModel ?? null,
