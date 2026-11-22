@@ -835,6 +835,8 @@
           ? item.bullets.filter((bullet) => typeof bullet === "string" && bullet.trim()).map((bullet) => bullet.trim())
           : [],
         suggestedText: typeof item.suggestedText === "string" ? item.suggestedText : undefined,
+        pros: Array.isArray(item.pros) ? item.pros.filter((p) => typeof p === "string" && p.trim()).map((p) => p.trim()) : undefined,
+        cons: Array.isArray(item.cons) ? item.cons.filter((c) => typeof c === "string" && c.trim()).map((c) => c.trim()) : undefined,
         modelUsed: typeof item.modelUsed === "string" ? item.modelUsed : item.modelUsed === null ? null : undefined,
         createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
       }))
@@ -862,6 +864,8 @@
         summary: insight.summary,
         bullets: Array.isArray(insight.bullets) ? [...insight.bullets] : [],
         suggestedText: insight.suggestedText,
+        pros: Array.isArray(insight.pros) && insight.pros.length > 0 ? [...insight.pros] : undefined,
+        cons: Array.isArray(insight.cons) && insight.cons.length > 0 ? [...insight.cons] : undefined,
         modelUsed: insight.modelUsed ?? null,
         createdAt: insight.createdAt,
       }));
@@ -908,7 +912,7 @@
     optionInsightState.active = null;
   }
 
-  function openOptionInsightPanel(question, optionKey) {
+  function openOptionInsightPanel(question, optionKey, opts = {}) {
     if (!questionCanAskAboutOption(question)) return;
     const currentValue = getQuestionValue(question);
     const active = getActiveInsight(question.id, optionKey);
@@ -932,7 +936,45 @@
     }
 
     optionInsightState.active = createDefaultActiveInsight(question.id, optionKey);
-    replaceQuestionOptionList(question, currentValue, optionKey, { focusComposer: true });
+    replaceQuestionOptionList(question, currentValue, optionKey, { focusComposer: opts.focusComposer !== false });
+  }
+
+  // Stepper UX: expose the Ask/insight panel without requiring a button click.
+  let autoOpenInsightTimer = null;
+
+  function optionKeyFromElement(el) {
+    if (!el) return null;
+    const input = el instanceof HTMLInputElement ? el : el.querySelector?.('input[type="radio"], input[type="checkbox"]');
+    const key = input?.value;
+    return key && key !== "__other__" ? key : null;
+  }
+
+  function autoOpenInsightForOption(card, optionKey) {
+    if (!stepper.enabled || !optionKey) return;
+    const question = questions.find((q) => q.id === card?.dataset?.questionId);
+    if (!question || !questionCanAskAboutOption(question)) return;
+    clearTimeout(autoOpenInsightTimer);
+    autoOpenInsightTimer = setTimeout(() => {
+      if (getActiveInsight(question.id, optionKey)) return;
+      // Only open while this option is still the focused one.
+      const cardNow = containerEl.querySelector(`.question-card[data-question-id="${escapeSelector(question.id)}"]`);
+      if (!cardNow || !cardNow.classList.contains("active")) return;
+      openOptionInsightPanel(question, optionKey, { focusComposer: false });
+    }, 250);
+  }
+
+  function cancelAutoOpenInsight() {
+    clearTimeout(autoOpenInsightTimer);
+  }
+
+  function autoCloseInsightOnLeave() {
+    if (!stepper.enabled) return;
+    const active = optionInsightState.active;
+    if (!active) return;
+    if (document.activeElement?.closest(".option-insight-panel")) return; // user typing/reading
+    closeOptionInsightPanel(active.questionId, active.optionKey);
+    const q = questions.find((item) => item.id === active.questionId);
+    if (q) replaceQuestionOptionList(q, getQuestionValue(q), active.optionKey);
   }
 
   function getSelectedInsightModel(activeInsight) {
@@ -1016,6 +1058,7 @@
           prompt,
           model: modelOverride && modelOverride !== defaultAskModel ? modelOverride : null,
           depth: active.selectedDepth || "standard",
+          kind: active.selectedChip === "tradeoffs" ? "tradeoffs" : null,
         }),
         signal: active.abortController.signal,
       });
@@ -1024,6 +1067,8 @@
       active.result = {
         summary: result.summary,
         bullets: Array.isArray(result.bullets) ? result.bullets : [],
+        pros: Array.isArray(result.pros) && result.pros.length > 0 ? result.pros : undefined,
+        cons: Array.isArray(result.cons) && result.cons.length > 0 ? result.cons : undefined,
         suggestedText: typeof result.suggestedText === "string" ? result.suggestedText : undefined,
         modelUsed: typeof result.modelUsed === "string" ? result.modelUsed : null,
       };
@@ -1057,6 +1102,8 @@
       prompt: active.prompt.trim(),
       summary: active.result.summary,
       bullets: Array.isArray(active.result.bullets) ? [...active.result.bullets] : [],
+      pros: Array.isArray(active.result.pros) ? [...active.result.pros] : undefined,
+      cons: Array.isArray(active.result.cons) ? [...active.result.cons] : undefined,
       suggestedText: active.result.suggestedText,
       modelUsed: active.result.modelUsed ?? null,
       createdAt: new Date().toISOString(),
@@ -1070,6 +1117,36 @@
     active.savedInsightId = insightId;
     optionInsightState.pinned.set(question.id, questionInsights);
     debounceSave();
+  }
+
+  function buildProsConsGrid(pros, cons) {
+    const grid = document.createElement("div");
+    grid.className = "insight-pros-cons";
+    [
+      { label: "Pros", items: pros, cls: "pros" },
+      { label: "Cons", items: cons, cls: "cons" },
+    ].forEach(({ label, items, cls }) => {
+      const col = document.createElement("div");
+      col.className = `insight-pros-cons-col insight-${cls}`;
+      const head = document.createElement("div");
+      head.className = "insight-pros-cons-head";
+      head.textContent = `${cls === "pros" ? "✓" : "✗"} ${label}`;
+      col.appendChild(head);
+      const list = document.createElement("ul");
+      list.className = "insight-pros-cons-list";
+      (Array.isArray(items) ? items : []).forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+      col.appendChild(list);
+      grid.appendChild(col);
+    });
+    return grid;
+  }
+
+  function hasProsCons(source) {
+    return Boolean(source && ((Array.isArray(source.pros) && source.pros.length > 0) || (Array.isArray(source.cons) && source.cons.length > 0)));
   }
 
   function createPinnedInsightCard(question, optionKey, insight) {
@@ -1103,7 +1180,9 @@
     summary.textContent = insight.summary;
     card.appendChild(summary);
 
-    if (Array.isArray(insight.bullets) && insight.bullets.length > 0) {
+    if (hasProsCons(insight)) {
+      card.appendChild(buildProsConsGrid(insight.pros, insight.cons));
+    } else if (Array.isArray(insight.bullets) && insight.bullets.length > 0) {
       const list = document.createElement("ul");
       list.className = "option-insight-bullets";
       insight.bullets.forEach((bullet) => {
@@ -1319,7 +1398,9 @@
       summary.textContent = active.result.summary;
       result.appendChild(summary);
 
-      if (Array.isArray(active.result.bullets) && active.result.bullets.length > 0) {
+      if (hasProsCons(active.result)) {
+        result.appendChild(buildProsConsGrid(active.result.pros, active.result.cons));
+      } else if (Array.isArray(active.result.bullets) && active.result.bullets.length > 0) {
         const list = document.createElement("ul");
         list.className = "option-insight-bullets";
         active.result.bullets.forEach((bullet) => {
@@ -2567,6 +2648,7 @@
     const current = options[optionIndex];
     if (current) {
       current.focus();
+      autoOpenInsightForOption(card, optionKeyFromElement(current));
     }
     if (isKeyboard) {
       card.classList.add('keyboard-nav');
@@ -2617,6 +2699,8 @@
     if (index < 0 || index >= nav.cards.length) return false;
     
     deactivateSubmitArea();
+    cancelAutoOpenInsight();
+    autoCloseInsightOnLeave();
     
     const prevCard = nav.cards[nav.questionIndex];
     if (prevCard) {
@@ -2665,6 +2749,8 @@
       prevCard.classList.remove('active', 'keyboard-nav');
       clearOptionHighlight(prevCard);
     }
+    cancelAutoOpenInsight();
+    autoCloseInsightOnLeave();
     nav.inSubmitArea = true;
     formFooter?.classList.add('active');
     submitBtn.focus();
@@ -3186,7 +3272,16 @@
       // so fall back to one.
       setTimeout(runSync, 500);
     };
-    formEl.addEventListener("change", scheduleStepperSync);
+    formEl.addEventListener("change", (event) => {
+      scheduleStepperSync();
+      // Selecting a single-choice option also counts as "inspecting" it —
+      // expose its Ask/insight panel (multi toggles stay quiet to avoid noise).
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === "radio" && target.checked) {
+        const card = target.closest(".question-card");
+        if (card) autoOpenInsightForOption(card, optionKeyFromElement(target));
+      }
+    });
     formEl.addEventListener("input", scheduleStepperSync);
   }
 
@@ -3907,12 +4002,16 @@
 
   function collectPersistedData() {
     const answers = {};
+    const attachmentPaths = {};
     questions.forEach((question) => {
       if (question.type === "info" || question.type === "image") return;
       answers[question.id] = getQuestionValue(question);
+      const paths = attachments.getPaths(question.id);
+      if (Array.isArray(paths) && paths.length > 0) attachmentPaths[question.id] = [...paths];
     });
     return {
       answers,
+      attachmentPaths,
       savedOptionInsights: serializeSavedOptionInsights(),
     };
   }
@@ -4027,6 +4126,107 @@
     });
   }
 
+  // ---- Draft attachments (IndexedDB — File objects survive structured clone) ----
+  const DRAFT_DB_NAME = "pi-interview-draft";
+  const DRAFT_STORE = "attachments";
+
+  function openDraftDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DRAFT_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DRAFT_STORE)) req.result.createObjectStore(DRAFT_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function draftKey(storageKey, questionId) {
+    return `${storageKey}::${questionId}`;
+  }
+
+  function idbPutAttachment(key, file) {
+    return openDraftDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(DRAFT_STORE, "readwrite");
+          tx.objectStore(DRAFT_STORE).put({ file }, key);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        })
+    );
+  }
+
+  function idbDeleteByPrefix(prefix) {
+    return openDraftDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(DRAFT_STORE, "readwrite");
+          const cursorReq = tx.objectStore(DRAFT_STORE).openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (cursor) {
+              if (typeof cursor.key === "string" && cursor.key.startsWith(prefix)) cursor.delete();
+              cursor.continue();
+            }
+          };
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        })
+    );
+  }
+
+  function idbGetAttachmentsByPrefix(prefix) {
+    return openDraftDb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const out = [];
+          const tx = db.transaction(DRAFT_STORE, "readonly");
+          const cursorReq = tx.objectStore(DRAFT_STORE).openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (cursor) {
+              if (typeof cursor.key === "string" && cursor.key.startsWith(prefix)) {
+                out.push({ questionId: cursor.key.slice(prefix.length), file: cursor.value?.file });
+              }
+              cursor.continue();
+            }
+          };
+          tx.oncomplete = () => { db.close(); resolve(out); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        })
+    );
+  }
+
+  function persistDraftAttachments() {
+    if (!session.storageKey) return;
+    questions.forEach((question) => {
+      if (question.type === "info" || question.type === "image") return;
+      const key = draftKey(session.storageKey, question.id);
+      const entry = attachments.getFile(question.id);
+      if (entry?.file) {
+        idbPutAttachment(key, entry.file).catch(() => {});
+      } else {
+        // Attachment removed locally — drop it from the draft.
+        idbDeleteByPrefix(key).catch(() => {});
+      }
+    });
+  }
+
+  function restoreDraftAttachments() {
+    if (!session.storageKey) return;
+    idbGetAttachmentsByPrefix(`${session.storageKey}::`)
+      .then((entries) => {
+        entries.forEach(({ questionId, file }) => {
+          if (!file) return;
+          const question = questions.find((q) => q.id === questionId);
+          if (!question || question.type === "info" || question.type === "image") return;
+          if (!attachments.getFile(questionId)) attachments.addFile(questionId, file);
+        });
+      })
+      .catch(() => {});
+  }
+
   function saveProgress() {
     if (!session.storageKey) return;
     const data = collectPersistedData();
@@ -4035,6 +4235,7 @@
     } catch (_err) {
       // ignore storage errors
     }
+    persistDraftAttachments();
   }
 
   function rerenderChoiceQuestions() {
@@ -4056,6 +4257,16 @@
           : parsed;
         populateForm(answers);
         restoreSavedOptionInsights(parsed?.savedOptionInsights);
+        const draftPaths = parsed?.attachmentPaths;
+        if (draftPaths && typeof draftPaths === "object") {
+          Object.entries(draftPaths).forEach(([qid, paths]) => {
+            if (!Array.isArray(paths)) return;
+            paths.forEach((p) => {
+              if (typeof p === "string" && p.trim()) attachments.addPath(qid, p);
+            });
+          });
+        }
+        restoreDraftAttachments();
         questions.forEach((q) => {
           if (q.type === "multi") updateDoneState(q.id);
         });
@@ -4083,6 +4294,7 @@
     } catch (_err) {
       // ignore storage errors
     }
+    idbDeleteByPrefix(`${session.storageKey}::`).catch(() => {});
   }
 
   async function hashQuestions() {

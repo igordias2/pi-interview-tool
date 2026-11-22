@@ -827,11 +827,21 @@ export function parseOptionInsight(text: string): OptionInsightResult {
 	const bullets = Array.isArray(insight.bullets)
 		? insight.bullets.filter((bullet): bullet is string => typeof bullet === "string" && bullet.trim().length > 0).map((bullet) => bullet.trim())
 		: [];
+	const stringList = (value: unknown): string[] | undefined =>
+		Array.isArray(value)
+			? value
+				.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+				.map((item) => item.trim())
+			: undefined;
+	const pros = stringList(insight.pros);
+	const cons = stringList(insight.cons);
 
 	const suggestedText = typeof insight.suggestedText === "string" ? insight.suggestedText.trim() : "";
 	return {
 		summary: insight.summary.trim(),
 		...(bullets.length > 0 ? { bullets } : {}),
+		...(pros && pros.length > 0 ? { pros } : {}),
+		...(cons && cons.length > 0 ? { cons } : {}),
 		...(suggestedText ? { suggestedText } : {}),
 	};
 }
@@ -1481,7 +1491,7 @@ export default function (pi: ExtensionAPI) {
 						return selectedModel;
 					};
 
-					onOptionInsight = async (questionId, option, prompt, modelOverride, depth, generateSignal) => {
+					onOptionInsight = async (questionId, option, prompt, modelOverride, depth, kind, generateSignal) => {
 						const question = questionsData.questions.find((q) => q.id === questionId);
 						if (!question) throw new Error(`Unknown question: ${questionId}`);
 						const optionText = getOptionLabel(option);
@@ -1493,11 +1503,23 @@ export default function (pi: ExtensionAPI) {
 							deep: "Provide a thorough analysis: detailed summary, multiple bullet points covering tradeoffs, risks, and edge cases.",
 						};
 
+						const isTradeoffs = kind === "tradeoffs";
+						const tradeoffInstructions = isTradeoffs
+							? "The user asked for TRADEOFFS. Weigh this option against the realistic alternatives. " +
+								"Balance the two sides (cost, risk, complexity, maintenance, performance, flexibility). " +
+								"Return ONLY JSON with this shape: {\"summary\":\"...\",\"pros\":[\"...\"],\"cons\":[\"...\"],\"suggestedText\":\"...\"}. " +
+								"Keep the summary to one or two sentences; keep each pro/con short; omit suggestedText when no rewrite is needed."
+							: null;
+
 						const questionPrompt = [
 							"Analyze this single interview answer option.",
 							depthInstructions[depth as keyof typeof depthInstructions] || depthInstructions.standard,
-							"Explain what is good or risky about the option, and suggest a rewrite only if it would materially improve clarity.",
-							"Return ONLY JSON with summary, bullets, and optional suggestedText.",
+							isTradeoffs
+								? tradeoffInstructions
+								: "Explain what is good or risky about the option, and suggest a rewrite only if it would materially improve clarity.",
+							isTradeoffs
+								? "Return ONLY JSON with summary, pros, cons, and optional suggestedText."
+								: "Return ONLY JSON with summary, bullets, and optional suggestedText.",
 							"",
 							questionsData.title ? `Interview: ${questionsData.title}` : null,
 							questionsData.description ? `Interview context: ${questionsData.description}` : null,

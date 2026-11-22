@@ -215,6 +215,8 @@ export interface AskModelOption {
 export interface OptionInsightResult {
 	summary: string;
 	bullets?: string[];
+	pros?: string[];
+	cons?: string[];
 	suggestedText?: string;
 	modelUsed?: string | null;
 }
@@ -257,6 +259,7 @@ export interface InterviewServerCallbacks {
 		prompt: string,
 		modelOverride: string | null,
 		depth: string,
+		kind: string | null,
 		signal: AbortSignal,
 	) => Promise<OptionInsightResult>;
 }
@@ -2049,6 +2052,7 @@ export async function startInterviewServer(
 					prompt?: string;
 					model?: string | null;
 					depth?: string;
+					kind?: string;
 				};
 
 				if (typeof payload.questionId !== "string") {
@@ -2091,6 +2095,7 @@ export async function startInterviewServer(
 						payload.prompt.trim(),
 						typeof payload.model === "string" ? payload.model : null,
 						typeof payload.depth === "string" ? payload.depth : "standard",
+						typeof payload.kind === "string" && payload.kind.trim() ? payload.kind.trim() : null,
 						controller.signal,
 					);
 					sendJson(res, 200, { ok: true, optionText, ...result });

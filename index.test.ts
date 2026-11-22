@@ -471,6 +471,20 @@ describe("parseOptionInsight", () => {
 	it("preserves parse error context", () => {
 		expect(() => parseOptionInsight("not json")).toThrow("Failed to parse option insight:");
 	});
+
+	it("parses pros/cons lists for tradeoff insights", () => {
+		expect(
+			parseOptionInsight('{"summary":"Solid middle ground","pros":["Cheap"," Fast"],"cons":[" Scalability limit"],"cons_junk":true}'),
+		).toEqual({
+			summary: "Solid middle ground",
+			pros: ["Cheap", "Fast"],
+			cons: ["Scalability limit"],
+		});
+	});
+
+	it("omits empty pros/cons lists", () => {
+		expect(parseOptionInsight('{"summary":"Ok","pros":[],"cons":[""]}')).toEqual({ summary: "Ok" });
+	});
 });
 
 describe("agent-facing interview response formatting", () => {

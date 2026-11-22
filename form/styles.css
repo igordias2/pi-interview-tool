@@ -2580,6 +2580,45 @@ button {
   color: var(--fg-muted);
 }
 
+/* Pros/cons side-by-side (tradeoff insights). */
+.insight-pros-cons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.insight-pros-cons-col {
+  border: 1px solid var(--border-muted);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.insight-pros-cons-head {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.insight-pros .insight-pros-cons-head { color: var(--accent, #4ade80); }
+.insight-cons .insight-pros-cons-head { color: var(--warning, #facc15); }
+
+.insight-pros-cons-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.insight-pros-cons-col.insight-cons .insight-pros-cons-list:empty::after {
+  content: "—";
+  color: var(--fg-muted);
+}
+
 .form-footer-spacer {
   flex: 1;
 }
