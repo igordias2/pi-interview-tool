@@ -10,6 +10,7 @@ const home = mkdtempSync(join(tmpdir(), "pi-interview-async-"));
 mkdirSync(join(home, ".pi", "agent"), { recursive: true });
 writeFileSync(join(home, ".pi", "agent", "settings.json"), JSON.stringify({ interview: { launcher: "orca", port: 0 } }));
 process.env.HOME = home;
+process.env.USERPROFILE = home; // os.homedir() prefers USERPROFILE on Windows
 const { default: interviewExtension } = await import("./index.ts");
 
 type Execute = (...args: unknown[]) => Promise<{ content: { text: string }[]; details: { status: string; url: string } }>;

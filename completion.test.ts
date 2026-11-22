@@ -13,6 +13,7 @@ writeFileSync(join(home, ".pi", "agent", "settings.json"), JSON.stringify({
 	interview: { launcher: "orca", snapshotDir, port: 0 },
 }));
 process.env.HOME = home;
+process.env.USERPROFILE = home; // os.homedir() prefers USERPROFILE on Windows
 const { default: interviewExtension } = await import("./index.ts");
 
 const ResultSchema = Type.Object({ details: Type.Object({ status: Type.String(), url: Type.String() }) });
