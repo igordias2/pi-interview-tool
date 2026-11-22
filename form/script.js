@@ -942,11 +942,12 @@
   // Stepper UX: expose the Ask/insight panel without requiring a button click.
   let autoOpenInsightTimer = null;
 
-  function optionKeyFromElement(el) {
-    if (!el) return null;
-    const input = el instanceof HTMLInputElement ? el : el.querySelector?.('input[type="radio"], input[type="checkbox"]');
-    const key = input?.value;
-    return key && key !== "__other__" ? key : null;
+  function optionKeyAtIndex(card, optionIndex) {
+    const question = questions.find((q) => q.id === card?.dataset?.questionId);
+    if (!question || typeof optionIndex !== "number" || optionIndex < 0) return null;
+    // Radio/checkbox inputs carry the option LABEL as value, not the key —
+    // resolve the real insight key by position.
+    return getOptionKeys(question.id)[optionIndex] || null;
   }
 
   function autoOpenInsightForOption(card, optionKey) {
@@ -2648,7 +2649,7 @@
     const current = options[optionIndex];
     if (current) {
       current.focus();
-      autoOpenInsightForOption(card, optionKeyFromElement(current));
+      autoOpenInsightForOption(card, optionKeyAtIndex(card, optionIndex));
     }
     if (isKeyboard) {
       card.classList.add('keyboard-nav');
@@ -3279,7 +3280,11 @@
       const target = event.target;
       if (target instanceof HTMLInputElement && target.type === "radio" && target.checked) {
         const card = target.closest(".question-card");
-        if (card) autoOpenInsightForOption(card, optionKeyFromElement(target));
+        if (card) {
+          const radios = formEl.querySelectorAll(`input[name="${escapeSelector(target.name)}"]`);
+          const optionIndex = Array.prototype.indexOf.call(radios, target);
+          autoOpenInsightForOption(card, optionKeyAtIndex(card, optionIndex));
+        }
       }
     });
     formEl.addEventListener("input", scheduleStepperSync);
