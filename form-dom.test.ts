@@ -98,7 +98,7 @@ describe("stepper option insight auto-open", () => {
 		const tradeoffsChip = Array.from(
 			dom.window.document.querySelectorAll<HTMLButtonElement>(".option-insight-chip"),
 		).find((chip) => chip.textContent === "Tradeoffs");
-		expect(tradeoffsChip).toBeDefined();
+		expect(tradeoffsChip).not.toBeUndefined();
 		tradeoffsChip?.click();
 		await vi.advanceTimersByTimeAsync(50);
 
