@@ -26,14 +26,27 @@
     </header>
 
     <form id="interview-form" novalidate>
-      <div id="questions-container" role="list"></div>
+      <aside id="stepper-sidebar" class="stepper-sidebar hidden" aria-label="Questions">
+        <div class="stepper-sidebar-list" id="stepper-sidebar-list" role="list"></div>
+        <footer class="stepper-sidebar-footer">
+          <span class="stepper-progress" id="stepper-progress"></span>
+          <button type="submit" class="btn-primary stepper-submit-btn" id="stepper-submit-btn">Submit</button>
+        </footer>
+      </aside>
 
-      <div id="error-container" aria-live="polite" class="error-message hidden"></div>
+      <div class="stepper-main" id="stepper-main">
+        <div id="questions-container" role="list"></div>
 
-      <footer class="form-footer">
-        <button type="button" id="save-btn-footer" class="btn-secondary">Save</button>
-        <button type="submit" id="submit-btn" class="btn-primary">Submit</button>
-      </footer>
+        <div id="error-container" aria-live="polite" class="error-message hidden"></div>
+
+        <footer class="form-footer">
+          <button type="button" id="stepper-prev-btn" class="btn-secondary hidden">← Anterior</button>
+          <div class="form-footer-spacer"></div>
+          <button type="button" id="save-btn-footer" class="btn-secondary">Save</button>
+          <button type="button" id="stepper-next-btn" class="btn-secondary hidden">Próxima →</button>
+          <button type="submit" id="submit-btn" class="btn-primary">Submit</button>
+        </footer>
+      </div>
     </form>
 
     <nav class="shortcuts-bar" aria-label="Keyboard shortcuts">

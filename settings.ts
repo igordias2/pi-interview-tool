@@ -22,6 +22,7 @@ export interface InterviewSettings {
 	autoSaveOnSubmit?: boolean; // Default: true
 	generateModel?: string;    // e.g., "anthropic/claude-haiku-4-5"
 	glimpseFloating?: boolean; // Default: false
+	viewMode?: "stepper" | "list"; // Default: "stepper"; "list" preserves the upstream UI
 }
 
 export const LAUNCHERS = ["glimpse", "browser", "orca"] as const;
@@ -33,6 +34,18 @@ export function assertValidLauncher(value: unknown): void {
 	if (typeof value === "string" && (LAUNCHERS as readonly string[]).includes(value)) return;
 	throw new Error(
 		`interview.launcher must be one of: ${LAUNCHERS.join(", ")} (received ${JSON.stringify(value)})`,
+	);
+}
+
+export const VIEW_MODES = ["stepper", "list"] as const;
+
+// viewMode changes the form layout, so an unrecognized value must fail loudly
+// instead of silently reverting to the default stepper.
+export function assertValidViewMode(value: unknown): void {
+	if (value === undefined) return;
+	if (typeof value === "string" && (VIEW_MODES as readonly string[]).includes(value)) return;
+	throw new Error(
+		`interview.viewMode must be one of: ${VIEW_MODES.join(", ")} (received ${JSON.stringify(value)})`,
 	);
 }
 
@@ -52,5 +65,6 @@ export function loadSettings(settingsPath: string = SETTINGS_PATH): InterviewSet
 	}
 
 	assertValidLauncher((interview as Record<string, unknown>).launcher);
+	assertValidViewMode((interview as Record<string, unknown>).viewMode);
 	return interview as InterviewSettings;
 }

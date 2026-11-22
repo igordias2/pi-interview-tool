@@ -318,6 +318,7 @@ Settings in `~/.pi/agent/settings.json`:
     "launcher": "browser",
     "browser": "Firefox",
     "glimpseFloating": false,
+    "viewMode": "stepper",
     "theme": {
       "mode": "auto",
       "name": "default",
@@ -348,6 +349,13 @@ Settings in `~/.pi/agent/settings.json`:
 **Browser**: `browser` names the application used for browser tabs (e.g. `"Firefox"`, `"Brave Browser"`). It applies when the form opens in a browser: `launcher: "browser"`, or `launcher` omitted with Glimpse unavailable. It has no effect under `"glimpse"` or `"orca"`.
 
 **Glimpse window**: `glimpseFloating` keeps the native macOS Glimpse window above other windows when `true` (default: `false`). It does not affect browser fallback behavior.
+
+**View mode**: `viewMode` selects the form layout (default in this fork: `"stepper"`).
+
+- `"stepper"`: one question per screen in a full-width canvas, with a left sidebar listing every question (answered ✓ / pending ●, value preview, click-to-jump), an answered counter + Submit in the sidebar footer, ←/→ and footer Previous/Next navigation, and an action bar per question with hot chips (`1` Review options, `2` Generate more, `3` Ask, `4` Anotar). Info panels stick to the question that follows them and are not separate steps.
+- `"list"`: the upstream single-column layout, byte-for-byte unchanged.
+
+All existing shortcuts work in both modes (⌘/Ctrl+←/→ questions, ⌘/Ctrl+Enter submit, ⌘/Ctrl+V paste, theme toggle). Auto-advance after answering is intentionally off.
 
 **Theme notes:**
 - `mode`: `dark` (default), `light`, or `auto` (follows OS unless overridden)

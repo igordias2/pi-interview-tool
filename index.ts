@@ -1545,6 +1545,7 @@ export default function (pi: ExtensionAPI) {
 						theme: themeConfig,
 						...(snapshotDir !== undefined ? { snapshotDir } : {}),
 						autoSaveOnSubmit: settings.autoSaveOnSubmit ?? true,
+						viewMode: settings.viewMode ?? "stepper",
 						...(questionsData.savedAnswers !== undefined ? { savedAnswers: questionsData.savedAnswers } : {}),
 						...(questionsData.savedOptionInsights !== undefined ? { savedOptionInsights: questionsData.savedOptionInsights } : {}),
 						...(questionsData.optionKeysByQuestion !== undefined ? { optionKeysByQuestion: questionsData.optionKeysByQuestion } : {}),

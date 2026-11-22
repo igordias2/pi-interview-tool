@@ -10,6 +10,9 @@
     ? data.askModels.filter((model) => model && typeof model.value === "string" && typeof model.provider === "string")
     : [];
   const defaultAskModel = typeof data.defaultAskModel === "string" ? data.defaultAskModel : null;
+  // Stepper view mode (igordias2 fork): one question per screen + sidebar.
+  // "list" preserves the upstream UI exactly; anything else falls back to stepper.
+  const viewMode = data.viewMode === "list" ? "list" : "stepper";
 
   const titleEl = document.getElementById("form-title");
   const descriptionEl = document.getElementById("form-description");
@@ -2639,6 +2642,7 @@
         textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
       }
     }
+    if (stepper.enabled) updateStepperView();
     return true;
   }
 
@@ -2662,6 +2666,7 @@
     formFooter?.classList.add('active');
     submitBtn.focus();
     if (formFooter) ensureElementVisible(formFooter);
+    if (stepper.enabled) updateStepperView();
   }
 
   function deactivateSubmitArea() {
@@ -2693,6 +2698,8 @@
       formEl.requestSubmit();
       return;
     }
+
+    if (stepper.enabled && handleStepperChipHotkey(event)) return;
 
     if (maybeStartOtherInput(event)) return;
 
@@ -2865,6 +2872,272 @@
     }
   }
 
+  // ---- Stepper view mode (igordias2 fork) ----
+  // One question per screen + sidebar. Everything here is a no-op in "list"
+  // mode, which keeps the upstream single-column UI byte-for-byte unchanged.
+  const stepper = {
+    enabled: false,
+    sidebarEl: document.getElementById("stepper-sidebar"),
+    listEl: document.getElementById("stepper-sidebar-list"),
+    progressEl: document.getElementById("stepper-progress"),
+    submitBtn: document.getElementById("stepper-submit-btn"),
+    prevBtn: document.getElementById("stepper-prev-btn"),
+    nextBtn: document.getElementById("stepper-next-btn"),
+    items: [],
+    visibleIndex: 0,
+  };
+
+  function stepperPlainTitle(question) {
+    const div = document.createElement("div");
+    div.innerHTML = renderLightMarkdown(question.question || "");
+    return div.textContent.trim();
+  }
+
+  function isQuestionAnswered(question) {
+    if (!question || question.type === "info") return false;
+    const value = getQuestionValue(question);
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") return !!value.option;
+    return typeof value === "string" && value.trim().length > 0;
+  }
+
+  function stepperPreview(question) {
+    const id = question.id;
+    const value = getQuestionValue(question);
+    if (question.type === "image") {
+      return Array.isArray(value) && value.length > 0 ? `${value.length} anexo(s)` : "";
+    }
+    if (question.type === "text") {
+      return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+    }
+    const labels = [];
+    formEl.querySelectorAll(`input[name="${escapeSelector(id)}"]:checked`).forEach((input) => {
+      const labelEl = input.closest(".option-item")?.querySelector(".option-item-label");
+      if (!labelEl) return;
+      const clone = labelEl.cloneNode(true);
+      clone.querySelectorAll(".recommended-pill").forEach((pill) => pill.remove());
+      labels.push(clone.textContent.replace(/\s+/g, " ").trim());
+    });
+    return labels.join(" + ");
+  }
+
+  function buildStepperSidebar() {
+    if (!stepper.enabled || !stepper.sidebarEl || !stepper.listEl) return;
+    stepper.listEl.innerHTML = "";
+    stepper.items = [];
+    questions.forEach((question, cardIndex) => {
+      if (question.type === "info") return;
+      const badge = stepper.items.length + 1;
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "stepper-item";
+      item.setAttribute("role", "listitem");
+
+      const state = document.createElement("span");
+      state.className = "stepper-item-state";
+      state.textContent = "●";
+
+      const body = document.createElement("span");
+      body.className = "stepper-item-body";
+
+      const title = document.createElement("span");
+      title.className = "stepper-item-title";
+      title.textContent = stepperPlainTitle(question);
+
+      const preview = document.createElement("span");
+      preview.className = "stepper-item-preview";
+
+      body.appendChild(title);
+      body.appendChild(preview);
+
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "stepper-item-badge";
+      badgeEl.textContent = String(badge);
+
+      item.appendChild(state);
+      item.appendChild(body);
+      item.appendChild(badgeEl);
+      item.addEventListener("click", () => {
+        nav.inSubmitArea = false;
+        deactivateSubmitArea();
+        focusQuestion(cardIndex, cardIndex >= nav.questionIndex ? 'next' : 'prev');
+      });
+      stepper.listEl.appendChild(item);
+      stepper.items.push({ question, cardIndex, item, state, preview });
+    });
+
+    if (stepper.submitBtn) {
+      stepper.submitBtn.addEventListener("click", (event) => {
+        // Reuse the real submit path; the button inside the aside would not
+        // submit the form natively (type=submit only works within <form> scope
+        // in some engines), so route through requestSubmit.
+        event.preventDefault();
+        formEl.requestSubmit();
+      });
+    }
+    if (stepper.prevBtn) {
+      stepper.prevBtn.addEventListener("click", () => {
+        if (nav.inSubmitArea) {
+          focusQuestion(stepper.visibleIndex, 'prev');
+          return;
+        }
+        prevQuestion();
+      });
+    }
+    if (stepper.nextBtn) {
+      stepper.nextBtn.addEventListener("click", () => nextQuestion());
+    }
+  }
+
+  function updateStepperSidebar() {
+    if (!stepper.enabled || !stepper.listEl) return;
+    const activeCardIndex = nav.inSubmitArea ? stepper.visibleIndex : nav.questionIndex;
+    let answeredCount = 0;
+    stepper.items.forEach(({ question, cardIndex, item, state, preview }) => {
+      const answered = isQuestionAnswered(question);
+      if (answered) answeredCount++;
+      item.classList.toggle("answered", answered);
+      item.classList.toggle("pending", !answered);
+      item.classList.toggle("active", cardIndex === activeCardIndex && !nav.inSubmitArea);
+      state.textContent = answered ? "✓" : "●";
+      const text = stepperPreview(question);
+      preview.textContent = text ? (text.length > 80 ? text.slice(0, 77) + "…" : text) : "";
+    });
+    if (stepper.progressEl) {
+      stepper.progressEl.textContent = `${answeredCount} de ${stepper.items.length} respondidas`;
+    }
+  }
+
+  function updateStepperVisibility() {
+    if (!stepper.enabled) return;
+    const activeIdx = nav.inSubmitArea ? stepper.visibleIndex : nav.questionIndex;
+    const lastQuestionIdx = nav.cards.length - 1;
+    while (lastQuestionIdx >= 0 && questions[lastQuestionIdx]?.type === "info") {
+      // not expected: info cards are skipped by callers
+      break;
+    }
+    nav.cards.forEach((card, i) => {
+      let visible = i === activeIdx;
+      if (!visible && questions[i]?.type === "info") {
+        let j = i + 1;
+        while (j < questions.length && questions[j]?.type === "info") j++;
+        // Info panels stick to the question that follows them; trailing info
+        // panels (after the last question) show with the last question/submit.
+        visible = j === activeIdx || (j >= questions.length && activeIdx === lastQuestionIdx);
+      }
+      card.classList.toggle("stepper-hidden", !visible);
+    });
+  }
+
+  function updateStepperFooter() {
+    if (!stepper.enabled) return;
+    if (stepper.prevBtn) {
+      stepper.prevBtn.classList.toggle("hidden", !nav.inSubmitArea && nav.questionIndex === 0);
+    }
+    if (stepper.nextBtn) {
+      const atLast = !nav.inSubmitArea && nextQuestionWouldLeaveForm();
+      stepper.nextBtn.classList.toggle("hidden", nav.inSubmitArea || atLast);
+    }
+  }
+
+  function nextQuestionWouldLeaveForm() {
+    return nav.questionIndex >= nav.cards.length - 1;
+  }
+
+  function updateStepperView() {
+    if (!stepper.enabled) return;
+    if (!nav.inSubmitArea) stepper.visibleIndex = nav.questionIndex;
+    updateStepperVisibility();
+    updateStepperSidebar();
+    updateStepperFooter();
+  }
+
+  function buildStepperActionBar(card, question) {
+    if (!stepper.enabled || !card || question?.type === "info") return;
+    const chips = [];
+    const reviewBtn = card.querySelector(".generate-more-review-btn");
+    const addBtn = card.querySelector(".generate-more-add-btn");
+    if (reviewBtn) chips.push({ key: "1", label: "↻ Review options", run: () => reviewBtn.click() });
+    if (addBtn) chips.push({ key: "2", label: "✦ Generate more", run: () => addBtn.click() });
+    const hasAsk = card.querySelector(".option-ask-btn");
+    if (hasAsk) {
+      chips.push({
+        key: "3",
+        label: "✳ Ask",
+        run: () => {
+          const row = card.querySelector(".option-row.focused, .option-item.focused");
+          const askBtn = row?.querySelector(".option-ask-btn") || card.querySelector(".option-ask-btn");
+          askBtn?.click();
+        },
+      });
+    }
+    if (card.querySelector(".option-note-input")) {
+      chips.push({
+        key: "4",
+        label: "✎ Anotar",
+        run: () => {
+          const row = card.querySelector(".option-row.focused, .option-item.focused");
+          const note = row?.querySelector(".option-note-input") || card.querySelector(".option-note-input");
+          note?.focus();
+        },
+      });
+    }
+    if (chips.length === 0) return;
+
+    const bar = document.createElement("div");
+    bar.className = "stepper-action-bar";
+    bar.setAttribute("role", "toolbar");
+    bar.setAttribute("aria-label", "AI actions");
+    chips.forEach(({ key, label, run }) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "stepper-chip";
+      chip.innerHTML = `<kbd>${key}</kbd> ${label}`;
+      chip.addEventListener("click", run);
+      bar.appendChild(chip);
+    });
+    card.appendChild(bar);
+  }
+
+  function handleStepperChipHotkey(event) {
+    if (!stepper.enabled || nav.inSubmitArea) return false;
+    if (event.metaKey || event.ctrlKey || event.altKey) return false;
+    if (!["1", "2", "3", "4"].includes(event.key)) return false;
+    if (isEditableTextControl(document.activeElement) || document.activeElement instanceof HTMLTextAreaElement) return false;
+    const card = nav.cards[nav.questionIndex];
+    if (!card) return false;
+    const chip = Array.from(card.querySelectorAll(".stepper-chip")).find(
+      (el) => el.querySelector("kbd")?.textContent === event.key
+    );
+    if (!chip) return false;
+    event.preventDefault();
+    chip.click();
+    return true;
+  }
+
+  function initStepper() {
+    stepper.enabled = viewMode === "stepper" && !!stepper.sidebarEl && !!stepper.listEl;
+    if (!stepper.enabled) return;
+
+    document.body.classList.add("stepper-mode");
+    stepper.sidebarEl.classList.remove("hidden");
+    buildStepperSidebar();
+    updateStepperView();
+
+    // Keep answered-state + previews fresh without interfering with typing.
+    let stepperSyncPending = false;
+    const scheduleStepperSync = () => {
+      if (stepperSyncPending) return;
+      stepperSyncPending = true;
+      requestAnimationFrame(() => {
+        stepperSyncPending = false;
+        updateStepperSidebar();
+      });
+    };
+    formEl.addEventListener("change", scheduleStepperSync);
+    formEl.addEventListener("input", scheduleStepperSync);
+  }
+
   function initQuestionNavigation() {
     nav.cards = Array.from(containerEl.querySelectorAll('.question-card'));
     
@@ -2922,12 +3195,12 @@
 
     const addBtn = document.createElement("button");
     addBtn.type = "button";
-    addBtn.className = "generate-more-btn";
+    addBtn.className = "generate-more-btn generate-more-add-btn";
     addBtn.innerHTML = '<span class="generate-more-icon">✦</span> Generate more';
 
     const reviewBtn = document.createElement("button");
     reviewBtn.type = "button";
-    reviewBtn.className = "generate-more-btn";
+    reviewBtn.className = "generate-more-btn generate-more-review-btn";
     reviewBtn.innerHTML = '<span class="generate-more-icon">↻</span> Review options';
 
     const status = document.createElement("div");
@@ -4073,7 +4346,9 @@
     questions.forEach((question, index) => {
       const showBadge = question.type !== "info";
       if (showBadge) badgeCount++;
-      containerEl.appendChild(createQuestionCard(question, index, showBadge ? badgeCount : null));
+      const card = createQuestionCard(question, index, showBadge ? badgeCount : null);
+      buildStepperActionBar(card, question);
+      containerEl.appendChild(card);
     });
 
     // Pre-populate: savedAnswers takes precedence over localStorage
@@ -4202,6 +4477,7 @@
       document.addEventListener("mousemove", refreshCountdown, { passive: true });
     }
 
+    initStepper();
     initQuestionNavigation();
 
     if (typeof mermaid !== "undefined") {

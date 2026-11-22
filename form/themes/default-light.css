@@ -29,3 +29,10 @@
   --q-color-5: #0891b2;
   --q-color-6: #7c3aed;
 }
+
+/* Stepper view mode (igordias2 fork) */
+:root {
+  --stepper-sidebar-bg: var(--bg-body);
+  --stepper-sidebar-border: var(--border-muted);
+  --stepper-canvas-bg: var(--bg-card);
+}
