@@ -20,6 +20,9 @@
   const formEl = document.getElementById("interview-form");
   
   const submitBtn = document.getElementById("submit-btn");
+  // True while a submission is in flight (submitForm disables the button);
+  // the stepper sync must not re-enable it mid-flight.
+  let submitInFlight = false;
   const errorContainer = document.getElementById("error-container");
   const successOverlay = document.getElementById("success-overlay");
   const expiredOverlay = document.getElementById("expired-overlay");
@@ -3019,9 +3022,13 @@
       stepper.submitBtn.disabled = !allAnswered;
       stepper.submitBtn.title = allAnswered ? "" : "Answer all questions to enable submit";
     }
-    // Keep the canvas footer submit in sync; never fight an in-flight submission
-    // (submitForm disables it while submitting).
-    if (submitBtn) submitBtn.disabled = !allAnswered || submitBtn.disabled;
+    // Keep the canvas footer submit in sync with the gate. Never make the
+    // disable sticky (a previous `|| submitBtn.disabled` here pinned it off
+    // forever) and never re-enable mid-flight.
+    if (submitBtn) {
+      if (!allAnswered) submitBtn.disabled = true;
+      else if (!submitInFlight) submitBtn.disabled = false;
+    }
   }
 
   function updateStepperVisibility() {
@@ -4287,6 +4294,7 @@
       showGlobalError(`Your answers were sent to the agent. ${submittedSnapshotSaved ? "Could not close the interview" : "Could not save the snapshot"}: ${message}`);
       submitBtn.textContent = submittedSnapshotSaved ? "Retry closing" : "Retry save";
       submitBtn.disabled = false;
+      submitInFlight = false;
       submitBtn.focus();
     }
   }
@@ -4304,6 +4312,7 @@
     clearFieldErrors();
 
     submitBtn.disabled = true;
+    submitInFlight = true;
     if (submittedPayload) {
       await finishSubmission();
       return;
@@ -4324,6 +4333,7 @@
         const message = err instanceof Error ? err.message : String(err);
         showGlobalError(`Invalid server response: ${message}`);
         submitBtn.disabled = false;
+        submitInFlight = false;
         return;
       }
 
@@ -4334,6 +4344,7 @@
           showGlobalError(submitResult.error || "Submission failed.");
         }
         submitBtn.disabled = false;
+        submitInFlight = false;
         return;
       }
 
@@ -4357,6 +4368,7 @@
         const message = err instanceof Error ? err.message : String(err);
         showGlobalError(`Failed to submit responses: ${message}`);
         submitBtn.disabled = false;
+        submitInFlight = false;
       }
     }
   }
